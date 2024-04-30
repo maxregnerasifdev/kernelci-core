@@ -123,7 +123,7 @@ jobs:
         if: success() && steps.check.outputs.code == 0
         run: |
           git remote add upstream ${{ github.event.inputs.kernel_repo }}
-          git push upstream ${{ github.event.inputs.kernel_branch }}
+          git push upstream ${{ github.event.inputs.kernel_branch }} || true
 
       - name: Archive kernel
         run: |
