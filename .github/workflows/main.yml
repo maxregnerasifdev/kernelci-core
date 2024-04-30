@@ -1,29 +1,28 @@
-# This is a basic workflow to help you get started with Actions
+name: Android Kernel CI
 
-name: CI
-
-# Controls when the action will run.
 on:
   push:
   pull_request:
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Enter the kernel version (e.g., v5.14)'
+        required: true
 
 jobs:
   check:
     runs-on: ubuntu-22.04
+
     strategy:
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ['3.10']
 
     steps:
-
       - name: Check out source code
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@master
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -55,54 +54,59 @@ jobs:
 
   lint:
     runs-on: ubuntu-22.04
-    name: Lint
+
     steps:
       - name: Check out source code
         uses: actions/checkout@v3
         with:
           fetch-depth: 32  # This is necessary to get the commits
 
-      - name: Get changed python files between base and head
-        run: >
-          echo CHANGED_FILES=$(echo $(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} -- | grep '\.py\|^kci$')) >> $GITHUB_ENV
-
-      - if: env.CHANGED_FILES
-        name: Set up Python
-        uses: actions/setup-python@master
-        with:
-          python-version: "3.10"
-
-      - if: env.CHANGED_FILES
-        name: Install Python packages
+      - name: Get changed files between base and head
         run: |
-          pip install -r requirements.txt
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} -- '*.py' 'kci_*' 'scripts/kci-*' | grep -v '\.md' || true)
+          echo "CHANGED_FILES=$CHANGED_FILES" >> $GITHUB_ENV
 
-      - if: env.CHANGED_FILES
-        uses: marian-code/python-lint-annotate@v3
-        name: Run linter annotations
+      - name: Set up Python
+        if: env.CHANGED_FILES
+        uses: actions/setup-python@v2
         with:
-          python-root-list: ${{ env.CHANGED_FILES }}
           python-version: "3.10"
-          use-black: false
-          use-flake8: false
-          use-isort: false
-          use-pydocstyle: false
-          use-vulture: false
 
-      - name: Get changed kci scripts between base and head
-        run: >
-          echo CHANGED_KCI_FILES=$(echo $(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} -- | grep -v '.*\.md' | grep '^kci_\|^scripts/kci-')) >> $GITHUB_ENV
+      - name: Install Python packages
+        if: env.CHANGED_FILES
+        run: pip install -r requirements.txt
 
-      - if: env.CHANGED_KCI_FILES
-        uses: marian-code/python-lint-annotate@v3
-        name: Run pycodestyle annotations on kci scripts
+      - name: Run linting
+        if: env.CHANGED_FILES
+        run: |
+          marian-code/python-lint-annotate@v3 \
+          --python-root-list "${{ env.CHANGED_FILES }}" \
+          --python-version "3.10" \
+          --use-black false \
+          --use-flake8 false \
+          --use-isort false \
+          --use-mypy false \
+          --use-pydocstyle false \
+          --use-pylint false \
+          --use-vulture false
+
+  upload_kernel:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Archive kernel
+        uses: actions/upload-artifact@v2
         with:
-          python-root-list: ${{ env.CHANGED_KCI_FILES }}
-          python-version: "3.10"
-          use-black: false
-          use-flake8: false
-          use-isort: false
-          use-mypy: false
-          use-pydocstyle: false
-          use-pylint: false
-          use-vulture: false
+          name: kernel-zip
+          path: |
+            # Replace 'build_dir' with the actual directory where your built kernel is located
+            zip -r kernel.zip build_dir/*
+
+      - name: Set Kernel Version
+        run: echo "KERNEL_VERSION=${{ github.event.inputs.kernel_version }}" >> $GITHUB_ENV
+
+      - name: Tag the Kernel
+        run: git tag -a "${{ env.KERNEL_VERSION }}" -m "Release ${{ env.KERNEL_VERSION }}"
+
+      - name: Push Tags
+        run: git push origin "${{ env.KERNEL_VERSION }}"
