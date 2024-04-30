@@ -116,9 +116,12 @@ jobs:
           ref: ${{ github.event.inputs.kernel_branch }}
           persist-credentials: false
 
+      - name: Check if it's a Git repository
+        run: test -d .git
+
       - name: Run KernelCore CI
+        if: success() && steps.check.outputs.code == 0
         run: |
-          # Commands for upstreaming kernel changes
           git remote add upstream ${{ github.event.inputs.kernel_repo }}
           git push upstream ${{ github.event.inputs.kernel_branch }}
 
