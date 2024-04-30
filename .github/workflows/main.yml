@@ -8,6 +8,18 @@ on:
       kernel_version:
         description: 'Enter the kernel version (e.g., v5.14)'
         required: true
+      device_name:
+        description: 'Enter the device name'
+        required: true
+      device_model:
+        description: 'Enter the device model'
+        required: true
+      kernel_repo:
+        description: 'Enter the URL of the kernel source repository'
+        required: true
+      kernel_branch:
+        description: 'Enter the branch of the kernel source repository'
+        required: true
 
 jobs:
   check:
@@ -94,13 +106,23 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     steps:
+      - name: Check out kernel source
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.event.inputs.kernel_repo }}
+          ref: ${{ github.event.inputs.kernel_branch }}
+
+      - name: Remove .git directory
+        run: rm -rf .git
+
       - name: Archive kernel
+        run: zip -r kernel.zip *
+
+      - name: Upload kernel zip
         uses: actions/upload-artifact@v2
         with:
           name: kernel-zip
-          path: |
-            # Replace 'build_dir' with the actual directory where your built kernel is located
-            zip -r kernel.zip build_dir/*
+          path: kernel.zip
 
       - name: Set Kernel Version
         run: echo "KERNEL_VERSION=${{ github.event.inputs.kernel_version }}" >> $GITHUB_ENV
@@ -110,3 +132,9 @@ jobs:
 
       - name: Push Tags
         run: git push origin "${{ env.KERNEL_VERSION }}"
+
+      - name: Set upstream repository
+        run: git remote add upstream ${{ github.event.inputs.kernel_repo }}
+
+      - name: Push changes to upstream
+        run: git push upstream ${{ github.event.inputs.kernel_branch }}
