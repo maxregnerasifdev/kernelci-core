@@ -127,12 +127,6 @@ jobs:
       - name: Set Kernel Version
         run: echo "KERNEL_VERSION=${{ github.event.inputs.kernel_version }}" >> $GITHUB_ENV
 
-      - name: Tag the Kernel
-        run: git tag -a "${{ env.KERNEL_VERSION }}" -m "Release ${{ env.KERNEL_VERSION }}"
-
-      - name: Push Tags
-        run: git push origin "${{ env.KERNEL_VERSION }}"
-
       - name: Set upstream repository
         run: git remote add upstream ${{ github.event.inputs.kernel_repo }}
 
